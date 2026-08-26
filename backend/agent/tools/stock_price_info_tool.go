@@ -40,10 +40,10 @@ func (t ToolQueryStockPriceInfo) InvokableRun(ctx context.Context, argumentsInJS
 	if err != nil {
 		return "", err
 	}
-	stockCodes := strings.Split(parms["stockCodes"].(string), ",")
-	var codes []string
-	for _, code := range stockCodes {
-		codes = append(codes, GetStockCode(code))
+	raw, _ := parms["stockCodes"].(string)
+	codes := normalizeToolStockCodes(strings.Split(raw, ","))
+	if len(codes) == 0 {
+		return "请输入股票代码", nil
 	}
 	realTimeData, err := data.NewStockDataApi().GetStockCodeRealTimeData(codes...)
 	if err != nil {

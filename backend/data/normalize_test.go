@@ -16,7 +16,11 @@ func TestNormalizeStockCode(t *testing.T) {
 		{"gb_AAPL", "gb_aapl"},
 		{"hk00700", "hk00700"},
 		{"00700.HK", "hk00700"},
+		{"00700", "hk00700"},
+		{"700", "hk00700"},
+		{"430300", "bj430300"},
 		{"", ""},
+		{"  ", ""},
 	}
 	for _, c := range cases {
 		got := normalizeStockCode(c.in)
