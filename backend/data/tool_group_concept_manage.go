@@ -17,21 +17,29 @@ import (
 
 // === 共享 helper ===
 
-// normalizeStockCode 把股票代码归一化为前缀格式（小写），用于写入 followed_stock / group_stock_info 表前统一格式。
+// NormalizeStockCode 把股票代码归一化为前缀格式（小写）。
+// tools 包的 GetStockCode、自选/分组写入、K 线/行情工具共用此实现，避免同一只股票因格式不同匹配失败。
+//
 // 支持的输入格式：
-//   - 后缀格式："600938.SH" → "sh600938"
-//   - 纯数字格式："600938" → "sh600938"
-//   - 已是前缀格式："sh600938" → "sh600938"（原样返回，转小写）
+//   - 后缀格式："600938.SH" → "sh600938"；"00700.HK" → "hk00700"
+//   - 纯数字 A 股："600938" → "sh600938"；"000001" → "sz000001"
+//   - 纯数字港股（≤5 位）："00700" / "700" → "hk00700"（A 股均为 6 位）
+//   - 北交所/新三板："430300" / "83xxxx" → "bj430300"
+//   - 已是前缀格式："sh600938" → "sh600938"（转小写）
 //   - 美股 us 前缀："usAAPL" → "gb_aapl"
 //   - 美股 gb_ 前缀："gb_AAPL" → "gb_aapl"
-//   - 港股 hk 前缀："hk00700" → "hk00700"（原样返回，转小写）
-//
-// 设计目标：避免同一只股票以不同格式（前缀/后缀）写入数据库，导致 Where("stock_code = ?") 匹配失败。
+func NormalizeStockCode(stockCode string) string {
+	return normalizeStockCode(stockCode)
+}
+
 func normalizeStockCode(stockCode string) string {
 	if stockCode == "" {
 		return ""
 	}
 	stockCode = strings.TrimSpace(stockCode)
+	if stockCode == "" {
+		return ""
+	}
 	// 美股：usXXX / USXXX → gb_XXX（与 Follow 函数原有逻辑保持一致）
 	if strings.HasPrefix(stockCode, "us") && !strings.Contains(stockCode, "_") {
 		stockCode = "gb_" + stockCode[2:]
@@ -44,6 +52,12 @@ func normalizeStockCode(stockCode string) string {
 		if len(sp) == 2 {
 			stockCode = sp[1] + sp[0]
 		}
+	} else if isAllDigitStockCode(stockCode) && len(stockCode) <= 5 {
+		// 纯 5 位及以下数字：港股（A 股均为 6 位）。不足 5 位补前导 0。
+		for len(stockCode) < 5 {
+			stockCode = "0" + stockCode
+		}
+		stockCode = "hk" + stockCode
 	} else if len(stockCode) > 0 {
 		// 纯数字代码（无前缀）：按首位数字判断交易所，加前缀
 		switch stockCode[0:1] {
@@ -51,11 +65,23 @@ func normalizeStockCode(stockCode string) string {
 			stockCode = "sh" + stockCode
 		case "0", "3":
 			stockCode = "sz" + stockCode
-		case "8", "9":
+		case "4", "8", "9":
 			stockCode = "bj" + stockCode
 		}
 	}
 	return strings.ToLower(stockCode)
+}
+
+func isAllDigitStockCode(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // addStockToGroupsByName 按名称查找/创建分组并关联股票（幂等）。返回成功处理的分组名称列表。

@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"strings"
 
 	"github.com/cloudwego/eino/components/tool"
@@ -38,10 +39,12 @@ var toolGroupMap = map[string]ToolGroup{
 	"GetEastMoneyKLine":       GroupStockAnalysis,
 	"GetEastMoneyKLineWithMA": GroupStockAnalysis,
 	"GetStockMinuteData":      GroupStockAnalysis,
+	"GetStockCallAuction":     GroupStockAnalysis,
 	"GetStockFinancialInfo":   GroupStockAnalysis,
 	"GetStockHolderNum":       GroupStockAnalysis,
 	"GetStockRZRQInfo":        GroupStockAnalysis,
 	"GetStockConceptInfo":     GroupStockAnalysis,
+	"GetIndustryValuation":    GroupStockAnalysis,
 
 	"QueryEvent": GroupStockAnalysis,
 
@@ -92,6 +95,11 @@ var toolGroupMap = map[string]ToolGroup{
 	"GetStockBillboard":           GroupStockAnalysis,
 	"GetStockOperationDeptTrade":  GroupStockAnalysis,
 	"GetStockOrgBasicInfo":        GroupStockAnalysis,
+	"GetTdxCompanyInfo":           GroupStockAnalysis,
+	"GetTdxFinanceInfo":           GroupStockAnalysis,
+	"GetTdxXDXRInfo":              GroupStockAnalysis,
+	"GetTdxCompanyCategory":       GroupStockAnalysis,
+	"GetTdxSymbolBelongBoard":     GroupStockAnalysis,
 	"ComparableCompanyAnalysis":   GroupStockAnalysis,
 	"HotspotDiscovery":            GroupMarket,
 
@@ -181,6 +189,9 @@ var toolGroupMap = map[string]ToolGroup{
 	"SendToFeishu":                   GroupOperations,
 	"SearchFund":                     GroupOperations,
 	"GetFundInfo":                    GroupOperations,
+	"GetFundKLine":                   GroupOperations,
+	"GetFundHistoryNetValue":         GroupOperations,
+	"GetFundTop10Holdings":           GroupOperations,
 	"GetEconomicData":                GroupOperations,
 	"GetTradingRecordList":           GroupOperations,
 	"GetTradingRecordStatistics":     GroupOperations,
@@ -346,7 +357,7 @@ func ClassifyQuestion(question string) map[ToolGroup]bool {
 func FilterToolsByGroups(allTools []tool.BaseTool, groups map[ToolGroup]bool) []tool.BaseTool {
 	var filtered []tool.BaseTool
 	for _, t := range allTools {
-		info, err := t.Info(nil)
+		info, err := t.Info(context.Background())
 		if err != nil {
 			filtered = append(filtered, t)
 			continue

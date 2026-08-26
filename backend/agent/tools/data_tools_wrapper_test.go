@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
 
+	"go-stock/backend/db"
 	"go-stock/backend/models"
 )
 
@@ -152,4 +154,50 @@ func TestInjectRecommendMeta_InvalidJSON(t *testing.T) {
 func isValidJSON(s string) bool {
 	var v any
 	return json.Unmarshal([]byte(s), &v) == nil
+}
+
+func TestAllDataToolsHaveGroupMapping(t *testing.T) {
+	db.Init(filepath.Join(t.TempDir(), "stock.db"))
+	all := GetAllDataTools()
+	all = append(all, GetHolidayTools()...)
+	if len(all) == 0 {
+		t.Fatal("expected data tools")
+	}
+	var missing []string
+	seen := map[string]int{}
+	for _, tl := range all {
+		info, err := tl.Info(context.Background())
+		if err != nil {
+			t.Errorf("tool Info() error: %v", err)
+			continue
+		}
+		seen[info.Name]++
+		if seen[info.Name] > 1 {
+			t.Errorf("duplicate tool name: %s", info.Name)
+		}
+		if _, ok := toolGroupMap[info.Name]; !ok {
+			missing = append(missing, info.Name)
+		}
+	}
+	if len(missing) > 0 {
+		t.Errorf("tools missing from toolGroupMap (would always be injected): %v", missing)
+	}
+}
+
+func TestQueryStockPriceInfoMissingCodes(t *testing.T) {
+	tool := GetQueryStockPriceInfoTool()
+	out, err := tool.InvokableRun(context.Background(), `{}`)
+	if err != nil {
+		t.Fatalf("InvokableRun error: %v", err)
+	}
+	if out != "请输入股票代码" {
+		t.Errorf("missing stockCodes = %q, want 请输入股票代码", out)
+	}
+	out, err = tool.InvokableRun(context.Background(), `{"stockCodes":123}`)
+	if err != nil {
+		t.Fatalf("InvokableRun error: %v", err)
+	}
+	if out != "请输入股票代码" {
+		t.Errorf("non-string stockCodes = %q, want 请输入股票代码", out)
+	}
 }

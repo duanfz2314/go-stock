@@ -14,12 +14,14 @@ func TestCacheTTLForToolPrecise(t *testing.T) {
 	}{
 		// 精确配置（覆盖组级默认）
 		{"F10低频数据1h", "GetStockOrgBasicInfo", 3600},
+		{"通达信F10公司资料1h", "GetTdxCompanyInfo", 3600},
 		{"每日变化10s", "GetStockLatestFinance", 10},
 		{"节假日24h", "IsTradingDay", 86400},
 		{"研报5min", "GetStockResearchReport", 300},
 		{"不缓存-AI生成", "CreateAiRecommendStocks", 0},
 		{"不缓存-实时时间", "GetCurrentTime", 0},
 		{"不缓存-分时数据", "GetStockMinuteData", 0},
+		{"不缓存-集合竞价", "GetStockCallAuction", 0},
 		{"操作类查询覆盖为60s", "GetTradingRecordList", 60},
 	}
 

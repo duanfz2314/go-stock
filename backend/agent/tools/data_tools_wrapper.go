@@ -225,7 +225,7 @@ func GetAllDataTools() []tool.BaseTool {
 
 	tools = append(tools, NewDataToolWrapper(
 		"FilterStocks",
-		"根据技术指标或者关注排名或者连涨/连跌跌天数筛选股票。支持多种K线形态和技术指标条件筛选，如MACD金叉、KDJ金叉、均线排列、K线形态，人气，关注排名，连涨/连跌跌天数等。",
+		"根据技术指标或者关注排名或者连涨/连跌天数筛选股票。支持多种K线形态和技术指标条件筛选，如MACD金叉、KDJ金叉、均线排列、K线形态，人气，关注排名，连涨/连跌天数等。",
 		map[string]*schema.ParameterInfo{
 			"keyword": {
 				Type:     "string",
@@ -1347,7 +1347,7 @@ func GetAllDataTools() []tool.BaseTool {
 		},
 		func(args string) (string, error) {
 			days := gjson.Get(args, "days").String()
-			codes := parseStockCodesFromArgs(args, "stockCode")
+			codes := normalizeToolStockCodes(parseStockCodesFromArgs(args, "stockCode"))
 			toIntDay := 90
 			if days != "" {
 				if d, err := parseInt(days); err == nil {
@@ -1357,7 +1357,7 @@ func GetAllDataTools() []tool.BaseTool {
 			var allResults []map[string]any
 			for _, code := range codes {
 				var klineData *[]data.KLineData
-				if strings.HasPrefix(code, "hk") || strings.HasPrefix(code, "us") || strings.HasPrefix(code, "gb_") {
+				if isHKOrUSCode(code) {
 					api := data.NewStockDataApi()
 					klineData = api.GetHK_KLineData(code, "day", int64(toIntDay))
 				} else {
@@ -2497,15 +2497,12 @@ func GetAllDataTools() []tool.BaseTool {
 			if stockCode == "" {
 				return "请输入股票代码", nil
 			}
-			codes := parseStockCodesFromArgs(args, "stockCode")
+			codes := normalizeToolStockCodes(parseStockCodesFromArgs(args, "stockCode"))
 			if len(codes) == 0 {
 				return "请输入股票代码", nil
 			}
 			var results []string
 			for _, code := range codes {
-				if code == "" {
-					continue
-				}
 				stockData, err := data.NewStockDataApi().GetStockCodeRealTimeData(code)
 				if err != nil || stockData == nil || len(*stockData) == 0 {
 					results = append(results, code+"：未找到股票信息")
@@ -3071,7 +3068,7 @@ func GetAllDataTools() []tool.BaseTool {
 			},
 		},
 		func(args string) (string, error) {
-			stockCode := gjson.Get(args, "stockCode").String()
+			stockCode := GetStockCode(gjson.Get(args, "stockCode").String())
 			if stockCode == "" {
 				return "请输入股票代码", nil
 			}
@@ -6709,7 +6706,11 @@ func getStockNameFromPlateStocks(plateStocks map[string]any, code string) string
 }
 
 func marketSentiment(upCount, downCount int) string {
-	ratio := float64(upCount) / float64(upCount+downCount)
+	total := upCount + downCount
+	if total <= 0 {
+		return "中性"
+	}
+	ratio := float64(upCount) / float64(total)
 	if ratio > 0.7 {
 		return "极度乐观"
 	} else if ratio > 0.6 {

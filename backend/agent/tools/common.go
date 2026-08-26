@@ -1,8 +1,9 @@
 package tools
 
 import (
-	"github.com/duke-git/lancet/v2/strutil"
 	"strings"
+
+	"go-stock/backend/data"
 )
 
 // @Author spark
@@ -10,26 +11,35 @@ import (
 // @Desc
 //-----------------------------------------------------------------------------------
 
+// GetStockCode 将 AI/用户传入的股票代码归一化为内部前缀格式（小写）。
+// 委托 data.NormalizeStockCode，与自选、分组、行情接口使用同一套规则，避免空串 panic、
+// 港股 5 位代码被误判为深市、美股 us 前缀未转 gb_ 等问题。
 func GetStockCode(dcCode string) string {
-	if strutil.ContainsAny(dcCode, []string{"."}) {
-		sp := strings.Split(dcCode, ".")
-		return strings.ToLower(sp[1] + sp[0])
-	}
+	return data.NormalizeStockCode(dcCode)
+}
 
-	//北京证券交易所	8（83、87、88 等）	创新型中小企业（专精特新为主）
-	//上海证券交易所	6（60、688 等）	大盘蓝筹、科创板（高新技术）
-	//深圳证券交易所	0、3（000、002、30 等）	中小盘、创业板（成长型创新企业）
-	switch dcCode[0:1] {
-	case "8":
-		return "bj" + dcCode
-	case "9":
-		return "bj" + dcCode
-	case "6":
-		return "sh" + dcCode
-	case "0":
-		return "sz" + dcCode
-	case "3":
-		return "sz" + dcCode
+// normalizeToolStockCodes 归一化工具参数中的股票代码列表，去空并按归一化结果去重。
+func normalizeToolStockCodes(codes []string) []string {
+	if len(codes) == 0 {
+		return codes
 	}
-	return dcCode
+	out := make([]string, 0, len(codes))
+	seen := make(map[string]struct{}, len(codes))
+	for _, c := range codes {
+		n := GetStockCode(strings.TrimSpace(c))
+		if n == "" {
+			continue
+		}
+		if _, ok := seen[n]; ok {
+			continue
+		}
+		seen[n] = struct{}{}
+		out = append(out, n)
+	}
+	return out
+}
+
+// isHKOrUSCode 判断归一化后的代码是否应走港股/美股数据路径。
+func isHKOrUSCode(code string) bool {
+	return strings.HasPrefix(code, "hk") || strings.HasPrefix(code, "us") || strings.HasPrefix(code, "gb_")
 }

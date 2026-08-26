@@ -35,6 +35,12 @@ var cacheTTLByTool = map[string]int{
 	"IndustryResearch":          3600, // 行业研究
 	"TrackingReport":            3600, // 跟踪报告
 	"FinanceDataQuery":          3600, // 财务数据查询
+	"GetIndustryValuation":      3600, // 行业估值
+	"GetTdxCompanyInfo":         3600,
+	"GetTdxFinanceInfo":         3600,
+	"GetTdxXDXRInfo":            3600,
+	"GetTdxCompanyCategory":     3600,
+	"GetTdxSymbolBelongBoard":   3600,
 
 	// ==== 每日变化（最新财务/估值百分位/融资融券/大宗交易/龙虎榜/营业部）——10 秒 ====
 	"GetStockLatestFinance":       10,
@@ -65,6 +71,9 @@ var cacheTTLByTool = map[string]int{
 	"GetDailyOperationPlanList":  60,
 	"SearchFund":                 300,
 	"GetFundInfo":                300,
+	"GetFundKLine":               300,
+	"GetFundHistoryNetValue":     300,
+	"GetFundTop10Holdings":       300,
 	"GetEconomicData":            300,
 	"ListPromptTemplates":        300,
 	"GetPromptTemplate":          300,
@@ -77,6 +86,7 @@ var cacheTTLByTool = map[string]int{
 	"SavePromptTemplate":           0,
 	"DeletePromptTemplate":         0,
 	"GetStockMinuteData":           0, // 分时数据实时性要求高
+	"GetStockCallAuction":          0, // 集合竞价时段数据实时性要求高
 	"AiRecommendStocks":            0, // AI 每次可能不同
 	"FinancialQA":                  0, // AI 问答每次可能不同
 }

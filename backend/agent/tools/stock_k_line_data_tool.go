@@ -50,9 +50,9 @@ func (q QueryStockKLine) InvokableRun(ctx context.Context, argumentsInJSON strin
 	if err != nil {
 		toIntDay = 90
 	}
-	if strutil.HasPrefixAny(stockCode, []string{"sz", "sh", "hk", "us", "gb_"}) {
+	if strutil.HasPrefixAny(stockCode, []string{"sz", "sh", "bj", "hk", "us", "gb_"}) {
 		K := &[]data.KLineData{}
-		if strutil.HasPrefixAny(stockCode, []string{"sz", "sh"}) {
+		if strutil.HasPrefixAny(stockCode, []string{"sz", "sh", "bj"}) {
 			K = data.NewStockDataApi().GetKLineData(stockCode, "240", toIntDay)
 		}
 		if strutil.HasPrefixAny(stockCode, []string{"hk", "us", "gb_"}) {
