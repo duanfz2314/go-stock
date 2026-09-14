@@ -178,7 +178,7 @@ class ResearchService:
             return {
                 "total": len(filtered),
                 "items": filtered[:50],
-                "note": "候选来自当日成交额靠前的 A 股（延迟行情），再用估值/质量规则打分。不是全市场穷尽扫描。",
+                "note": "候选来自当日成交额靠前的 A 股（延迟行情），再用估值/质量规则打初筛分。点进个股页会补上日 K，完整分可能更高或更低。",
             }
 
         key = "screen:" + "&".join(f"{k}={params.get(k)}" for k in sorted(params))

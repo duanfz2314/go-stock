@@ -128,12 +128,12 @@ class AShareClient:
                 }
             )
         return {
-            "up": dis.get("up_num"),
-            "down": dis.get("down_num"),
+            "up": dis.get("rise_num"),
+            "down": dis.get("fall_num"),
             "flat": dis.get("flat_num"),
-            "limit_up": dis.get("up10"),
-            "limit_down": dis.get("down10"),
-            "avg_pct": _num(dis.get("average_rise")),
+            "limit_up": dis.get("up_10"),
+            "limit_down": dis.get("down_10"),
+            "avg_pct": None if _num(dis.get("average_rise")) is None else round(_num(dis.get("average_rise")) * 100, 2),
             "suspend": dis.get("suspend_num"),
             "histogram": {
                 "down10": dis.get("down_10"),
@@ -142,11 +142,11 @@ class AShareClient:
                 "down4": dis.get("down_4"),
                 "down2": dis.get("down_2"),
                 "flat": dis.get("flat_num"),
-                "up2": dis.get("up2"),
-                "up4": dis.get("up4"),
-                "up6": dis.get("up6"),
-                "up8": dis.get("up8"),
-                "up10": dis.get("up10"),
+                "up2": dis.get("up_2"),
+                "up4": dis.get("up_4"),
+                "up6": dis.get("up_6"),
+                "up8": dis.get("up_8"),
+                "up10": dis.get("up_10"),
             },
             "index_updown": quotes,
         }

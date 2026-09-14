@@ -344,9 +344,9 @@ async function runScreener() {
       </tr>`
       )
       .join("");
-    box.innerHTML = `<p class="muted">${data.note} 命中 ${data.total} 只，展示前 ${data.items.length} 只。</p>
+    box.innerHTML = `<p class="muted">${data.note} 命中 ${data.total} 只，展示前 ${data.items.length} 只。初筛分不含日 K，点进去才是完整研究评分。</p>
       <table class="table">
-        <thead><tr><th>名称</th><th>行业</th><th>价格</th><th>涨跌</th><th>PE</th><th>PB</th><th>ROE</th><th>评分</th></tr></thead>
+          <thead><tr><th>名称</th><th>行业</th><th>价格</th><th>涨跌</th><th>PE</th><th>PB</th><th>ROE</th><th>初筛分</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
     box.querySelectorAll("tr[data-code]").forEach((tr) => tr.addEventListener("click", () => openStock(tr.dataset.code)));
