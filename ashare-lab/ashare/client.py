@@ -151,10 +151,11 @@ class AShareClient:
             "index_updown": quotes,
         }
 
-    def fetch_sectors(self, limit: int = 16) -> List[Dict[str, Any]]:
+    def fetch_sectors(self, limit: int = 16, sort: str = "pct") -> List[Dict[str, Any]]:
+        fid = "f62" if sort == "flow" else "f3"
         url = (
             "https://push2delay.eastmoney.com/api/qt/clist/get"
-            f"?pn=1&pz={limit}&po=1&np=1&fltt=2&invt=2&fid=f3"
+            f"?pn=1&pz={limit}&po=1&np=1&fltt=2&invt=2&fid={fid}"
             "&fs=m:90+t:2+f:!50&fields=f12,f14,f2,f3,f62,f184"
         )
         data = http_json(url, "https://quote.eastmoney.com/center/gridlist.html")
@@ -244,6 +245,120 @@ class AShareClient:
             "list_date": r.get("f189"),
             "main_net_inflow": _num(r.get("f62")),
         }
+
+    def fetch_today_flow(self, code: str) -> Dict[str, Any]:
+        """East Money delayed snapshot: 主力=超大单+大单."""
+        url = (
+            "https://push2delay.eastmoney.com/api/qt/ulist.np/get?fltt=2&invt=2"
+            f"&secids={em_secid(code)}"
+            "&fields=f12,f14,f2,f3,f62,f184,f66,f69,f72,f75,f78,f81,f84,f87"
+        )
+        data = http_json(url, "https://data.eastmoney.com/")
+        rows = (data.get("data") or {}).get("diff") or []
+        if isinstance(rows, dict):
+            rows = list(rows.values())
+        if not rows:
+            return {}
+        r = rows[0]
+        today = time.strftime("%Y-%m-%d")
+        return {
+            "date": today,
+            "main_net": _num(r.get("f62")),
+            "main_pct": _num(r.get("f184")),
+            "extra_large_net": _num(r.get("f66")),
+            "large_net": _num(r.get("f72")),
+            "medium_net": _num(r.get("f78")),
+            "small_net": _num(r.get("f84")),
+            "source": "eastmoney",
+        }
+
+    def fetch_flow_history(self, code: str, limit: int = 30) -> List[Dict[str, Any]]:
+        """Sina daily money flow. 主力净流入 = 超大单净额 + 大单净额."""
+        symbol = sina_symbol(code)
+        url = (
+            "https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/"
+            f"MoneyFlow.ssl_qsfx_lscjfb?page=1&num={limit}&sort=opendate&asc=0&daima={symbol}"
+        )
+        raw = http_get(url, "https://vip.stock.finance.sina.com.cn/", extra_headers={"Host": "vip.stock.finance.sina.com.cn"})
+        text = raw.decode("utf-8", "replace")
+        if not text or text[0] not in "[{":
+            text = raw.decode("gb18030", "replace")
+        rows = json.loads(text)
+        out = []
+        for r in rows:
+            extra = _num(r.get("r0_net"))
+            large = _num(r.get("r1_net"))
+            main = None if extra is None and large is None else (extra or 0) + (large or 0)
+            out.append(
+                {
+                    "date": str(r.get("opendate") or "")[:10],
+                    "close": _num(r.get("trade")),
+                    "pct": None if _num(r.get("changeratio")) is None else round(_num(r.get("changeratio")) * 100, 2),
+                    "main_net": main,
+                    "main_pct": None if _num(r.get("ratioamount")) is None else round(_num(r.get("ratioamount")) * 100, 2),
+                    "extra_large_net": extra,
+                    "large_net": large,
+                    "medium_net": _num(r.get("r2_net")),
+                    "small_net": _num(r.get("r3_net")),
+                    "source": "sina",
+                }
+            )
+        return [x for x in out if x["date"]]
+
+    def fetch_fund_flow(self, code: str, limit: int = 30) -> List[Dict[str, Any]]:
+        history: List[Dict[str, Any]] = []
+        try:
+            history = self.fetch_flow_history(code, limit)
+        except Exception:
+            history = []
+        today: Dict[str, Any] = {}
+        try:
+            today = self.fetch_today_flow(code)
+        except Exception:
+            today = {}
+        if today.get("main_net") is None:
+            return history
+        dates = {d.get("date") for d in history}
+        if today.get("date") not in dates:
+            return [today] + history
+        # Same calendar day: prefer East Money snapshot (less delayed).
+        merged = [today] + [d for d in history if d.get("date") != today.get("date")]
+        return merged
+
+    def fetch_money_rank(self, limit: int = 12, direction: str = "in") -> List[Dict[str, Any]]:
+        po = 1 if direction != "out" else 0
+        fs = "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048"
+        url = (
+            "https://push2delay.eastmoney.com/api/qt/clist/get"
+            f"?np=1&fltt=2&invt=2&fs={urllib.parse.quote(fs, safe='+:!')}"
+            "&fields=f12,f13,f14,f2,f3,f62,f184,f66,f72,f100"
+            f"&fid=f62&pn=1&pz={limit}&po={po}"
+        )
+        data = http_json(url, "https://data.eastmoney.com/zjlx/detail.html")
+        rows = (data.get("data") or {}).get("diff") or []
+        if isinstance(rows, dict):
+            rows = list(rows.values())
+        out = []
+        for r in rows:
+            code = str(r.get("f12") or "")
+            name = str(r.get("f14") or "")
+            if not is_a_share_equity(code, name):
+                continue
+            out.append(
+                {
+                    "code": code,
+                    "ts_code": ts_code(code),
+                    "name": name,
+                    "price": _num(r.get("f2")),
+                    "pct": _num(r.get("f3")),
+                    "main_net_inflow": _num(r.get("f62")),
+                    "main_net_pct": _num(r.get("f184")),
+                    "extra_large_net": _num(r.get("f66")),
+                    "large_net": _num(r.get("f72")),
+                    "industry": r.get("f100"),
+                }
+            )
+        return out
 
     def fetch_kline(self, code: str, limit: int = 180) -> Tuple[List[Dict[str, Any]], str]:
         errors = []
@@ -427,7 +542,7 @@ class AShareClient:
         }
 
     def fetch_screener(self, page: int = 1, size: int = 80, sort: str = "amount") -> List[Dict[str, Any]]:
-        fid_map = {"amount": "f6", "pct": "f3", "mktcap": "f20", "turnover": "f8"}
+        fid_map = {"amount": "f6", "pct": "f3", "mktcap": "f20", "turnover": "f8", "flow": "f62"}
         fid = fid_map.get(sort, "f6")
         fs = "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048"
         url = (

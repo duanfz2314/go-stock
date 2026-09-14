@@ -82,6 +82,7 @@ button { cursor: pointer; }
 }
 .ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
 .kline { width: 100%; height: 280px; background: #0a1822; border-radius: 12px; }
+.flow-chart { width: 100%; height: 160px; background: #0a1822; border-radius: 12px; }
 .quote-name { font-size: 28px; margin: 0; }
 .sub { color: var(--muted); margin: 4px 0 14px; }
 .reason { font-size: 13px; color: #c5d5dd; margin: 4px 0; }

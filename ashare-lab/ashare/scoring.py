@@ -76,6 +76,7 @@ def score_stock(
     debt_ratio: Any = None,
     trend: Optional[Dict[str, Any]] = None,
     main_net_inflow: Any = None,
+    fund_flow: Optional[Dict[str, Any]] = None,
     turnover: Any = None,
     mkt_cap: Any = None,
 ) -> ResearchScore:
@@ -269,36 +270,78 @@ def score_stock(
         t_reasons.append(f"近 20 日涨跌 {ret20:.1f}%。")
     t_score = _clip(t_score, 0, 25)
 
-    # ---- 资金 20 ----
+    # ---- 资金 20：优先看近 5 日主力净流入，而不是只看当天 ----
     f_score = 0.0
     f_reasons: List[str] = []
-    flow = _n(main_net_inflow)
-    if flow is None:
+    flow_info = fund_flow or {}
+    today_flow = _n(flow_info.get("today_main"))
+    if today_flow is None:
+        today_flow = _n(main_net_inflow)
+    sum5 = _n(flow_info.get("sum_5"))
+    consec = int(flow_info.get("consecutive") or 0)
+    extra = _n(flow_info.get("today_extra_large"))
+
+    if today_flow is None:
+        f_score += 3
+        f_reasons.append("缺少当日主力净流入。")
+    elif today_flow > 0:
         f_score += 6
-        f_reasons.append("缺少主力净流入，资金项中性。")
-    elif flow > 0:
-        f_score += 12
-        f_reasons.append(f"主力净流入 {flow / 1e8:.2f} 亿元。")
+        f_reasons.append(f"当日主力净流入 {today_flow / 1e8:.2f} 亿元。")
     else:
+        f_score += 1
+        f_reasons.append(f"当日主力净流出 {abs(today_flow) / 1e8:.2f} 亿元。")
+
+    if extra is not None and today_flow is not None:
+        if extra > 0 and today_flow > 0:
+            f_score += 2
+            f_reasons.append(f"超大单净流入 {extra / 1e8:.2f} 亿元，和主力方向一致。")
+        elif extra < 0 and today_flow < 0:
+            f_reasons.append(f"超大单净流出 {abs(extra) / 1e8:.2f} 亿元。")
+        elif extra > 0 and today_flow < 0:
+            f_reasons.append("超大单在买、主力合计却在卖，结构有分歧。")
+
+    if sum5 is None:
         f_score += 3
-        f_reasons.append(f"主力净流出 {abs(flow) / 1e8:.2f} 亿元。")
-    vr = _n(trend.get("vol_ratio"))
-    if vr is None:
-        f_score += 3
-    elif 0.8 <= vr <= 2.2:
-        f_score += 5
-        f_reasons.append(f"量比 {vr:.2f}，成交活跃度正常。")
-    elif vr > 2.2:
-        f_score += 3
-        f_reasons.append(f"量比 {vr:.2f}，放量，需区分是进攻还是出货。")
+        f_reasons.append("缺少近 5 日主力净流入，资金项不完全。")
+    elif sum5 > 0:
+        f_score += 6
+        f_reasons.append(f"近 5 日主力合计净流入 {sum5 / 1e8:.2f} 亿元。")
+    else:
+        f_score += 1
+        f_reasons.append(f"近 5 日主力合计净流出 {abs(sum5) / 1e8:.2f} 亿元。")
+
+    if consec >= 3:
+        f_score += 4
+        f_reasons.append(f"主力连续 {consec} 日净流入。")
+    elif consec == 2:
+        f_score += 2
+        f_reasons.append("主力连续 2 日净流入。")
+    elif consec <= -5:
+        f_reasons.append(f"主力连续 {abs(consec)} 日净流出。")
+        risks.append("主力资金连续流出，短线需要更小心。")
+    elif consec <= -3:
+        f_score += 1
+        f_reasons.append(f"主力连续 {abs(consec)} 日净流出。")
+    elif consec < 0:
+        f_score += 1
+        f_reasons.append("最近一个交易日主力为净流出。")
     else:
         f_score += 2
+
+    vr = _n(trend.get("vol_ratio"))
+    if vr is None:
+        f_score += 1
+    elif 0.8 <= vr <= 2.2:
+        f_score += 2
+        f_reasons.append(f"量比 {vr:.2f}，成交活跃度正常。")
+    elif vr > 2.2:
+        f_score += 1
+        f_reasons.append(f"量比 {vr:.2f}，放量，需区分是进攻还是出货。")
+    else:
         f_reasons.append(f"量比 {vr:.2f}，交投清淡。")
     to = _n(turnover)
     if to is not None:
         f_reasons.append(f"换手率 {to:.2f}%。")
-        if 0.5 <= to <= 8:
-            f_score += 3
     f_score = _clip(f_score, 0, 20)
 
     parts = [
@@ -320,6 +363,12 @@ def lightweight_score(row: Dict[str, Any]) -> ResearchScore:
         pb=row.get("pb"),
         roe=row.get("roe"),
         main_net_inflow=row.get("main_net_inflow"),
+        fund_flow={
+            "today_main": row.get("main_net_inflow"),
+            "today_extra_large": row.get("extra_large_net"),
+            "sum_5": row.get("sum_5"),
+            "consecutive": row.get("consecutive") or 0,
+        },
         turnover=row.get("turnover"),
         mkt_cap=row.get("mkt_cap"),
         trend={

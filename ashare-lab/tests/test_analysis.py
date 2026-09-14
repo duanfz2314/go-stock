@@ -5,6 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ashare.codes import em_secid, is_a_share_equity, market_of, tencent_symbol, ts_code
+from ashare.fundflow import consecutive_flow, summarize_fund_flow
 from ashare.indicators import macd, rsi, sma, summarize_trend
 from ashare.scoring import lightweight_score, score_stock
 
@@ -75,6 +76,12 @@ class ScoreTests(unittest.TestCase):
                 "ret20": 4.2,
             },
             main_net_inflow=8e8,
+            fund_flow={
+                "today_main": 8e8,
+                "today_extra_large": 5e8,
+                "sum_5": 2.1e9,
+                "consecutive": 4,
+            },
             turnover=0.4,
             mkt_cap=1.6e12,
         )
@@ -104,6 +111,51 @@ class ScoreTests(unittest.TestCase):
         ).to_dict()
         self.assertEqual(set(data), {"total", "verdict", "verdict_note", "parts", "risks"})
         self.assertEqual(len(data["parts"]), 4)
+
+
+class FundFlowTests(unittest.TestCase):
+    def test_consecutive_and_summary(self):
+        self.assertEqual(consecutive_flow([1, 2, 3, -1]), 3)
+        self.assertEqual(consecutive_flow([-2, -1, 4]), -2)
+        days = [
+            {"date": "2026-09-14", "main_net": 1e8, "extra_large_net": 6e7, "large_net": 4e7, "source": "eastmoney"},
+            {"date": "2026-09-11", "main_net": 2e8},
+            {"date": "2026-09-10", "main_net": -5e7},
+            {"date": "2026-09-09", "main_net": 3e7},
+            {"date": "2026-09-08", "main_net": 4e7},
+        ]
+        s = summarize_fund_flow(days)
+        self.assertEqual(s["today_main"], 1e8)
+        self.assertEqual(s["consecutive"], 2)
+        self.assertEqual(s["inflow_days_5"], 4)
+        self.assertAlmostEqual(s["sum_5"] / 1e8, 3.2)
+
+    def test_five_day_inflow_beats_one_day(self):
+        weak_today = score_stock(
+            name="示例",
+            pe_ttm=18,
+            pb=2,
+            roe=15,
+            revenue_yoy=10,
+            profit_yoy=10,
+            trend={"alignment": "多头排列", "macd": {"cross": "多头"}, "rsi14": 55, "vol_ratio": 1.0},
+            fund_flow={"today_main": -1e8, "sum_5": -8e8, "consecutive": -5, "today_extra_large": -8e7},
+            mkt_cap=5e10,
+        )
+        strong = score_stock(
+            name="示例",
+            pe_ttm=18,
+            pb=2,
+            roe=15,
+            revenue_yoy=10,
+            profit_yoy=10,
+            trend={"alignment": "多头排列", "macd": {"cross": "多头"}, "rsi14": 55, "vol_ratio": 1.0},
+            fund_flow={"today_main": 2e8, "sum_5": 9e8, "consecutive": 4, "today_extra_large": 1.2e8},
+            mkt_cap=5e10,
+        )
+        self.assertGreater(strong.total, weak_today.total)
+        fund_part = next(p for p in strong.parts if p.name == "资金")
+        self.assertGreaterEqual(fund_part.score, 14)
 
 
 if __name__ == "__main__":

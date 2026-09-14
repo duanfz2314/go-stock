@@ -75,6 +75,49 @@ function isWatched(code) {
   return loadWatch().some((x) => x.code === code);
 }
 
+function drawFlow(canvas, days) {
+  const ctx = canvas.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+  const rows = (days || []).slice(0, 12).reverse();
+  if (!rows.length) return;
+  const vals = rows.map((d) => Number(d.main_net) || 0);
+  const max = Math.max(...vals.map((v) => Math.abs(v)), 1);
+  const mid = h / 2;
+  const slot = w / rows.length;
+  rows.forEach((d, i) => {
+    const v = Number(d.main_net) || 0;
+    const bh = (Math.abs(v) / max) * (mid - 10);
+    const x = i * slot + slot * 0.2;
+    ctx.fillStyle = v >= 0 ? "#f04343" : "#27c281";
+    if (v >= 0) ctx.fillRect(x, mid - bh, slot * 0.6, bh);
+    else ctx.fillRect(x, mid, slot * 0.6, bh);
+  });
+  ctx.strokeStyle = "#1d3646";
+  ctx.beginPath();
+  ctx.moveTo(0, mid);
+  ctx.lineTo(w, mid);
+  ctx.stroke();
+}
+
+function flowTable(list) {
+  return (list || [])
+    .map(
+      (r) => `<tr data-code="${r.code || ""}">
+        <td>${r.name} ${r.code ? `<span class="muted">${r.code}</span>` : ""}</td>
+        <td class="${clsPct(r.pct)}">${signed(r.pct)}%</td>
+        <td class="${clsPct(r.main_net_inflow)}">${yi(r.main_net_inflow)}</td>
+        <td class="${clsPct(r.main_net_pct)}">${r.main_net_pct == null ? "—" : signed(r.main_net_pct, 2) + "%"}</td>
+      </tr>`
+    )
+    .join("");
+}
+
 function drawKline(canvas, bars) {
   const ctx = canvas.getContext("2d");
   const dpr = window.devicePixelRatio || 1;
@@ -169,12 +212,14 @@ async function renderMarket() {
         <td>${r.name} <span class="muted">${r.code}</span></td>
         <td>${fmt(r.price)}</td>
         <td class="${clsPct(r.pct)}">${signed(r.pct)}%</td>
+        <td class="${clsPct(r.main_net_inflow)}">${yi(r.main_net_inflow)}</td>
         <td>${fmt(r.pe_ttm || r.pe, 1)}</td>
         <td>${fmt(r.roe, 1)}%</td>
         <td>${r.score ? r.score.total : "—"}</td>
       </tr>`
       )
       .join("");
+    const sectorFlow = flowTable(data.sectors_flow || []).replace(/data-code="[^"]*"/g, 'data-code=""');
     pages.market.innerHTML = `
       <div class="grid indices">${idxs}</div>
       <div class="grid two" style="margin-top:14px">
@@ -193,10 +238,27 @@ async function renderMarket() {
           <table class="table"><thead><tr><th>行业</th><th>涨跌</th><th>主力净流入</th></tr></thead><tbody>${sectors}</tbody></table>
         </div>
       </div>
+      <div class="grid two" style="margin-top:14px">
+        <div class="card">
+          <h3>个股主力净流入榜</h3>
+          <table class="table"><thead><tr><th>名称</th><th>涨跌</th><th>主力净流入</th><th>占成交</th></tr></thead>
+          <tbody>${flowTable(data.money_in)}</tbody></table>
+        </div>
+        <div class="card">
+          <h3>个股主力净流出榜</h3>
+          <table class="table"><thead><tr><th>名称</th><th>涨跌</th><th>主力净流入</th><th>占成交</th></tr></thead>
+          <tbody>${flowTable(data.money_out)}</tbody></table>
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <h3>行业主力净流入</h3>
+        <table class="table"><thead><tr><th>行业</th><th>涨跌</th><th>主力净流入</th><th>占成交</th></tr></thead>
+        <tbody>${sectorFlow}</tbody></table>
+      </div>
       <div class="card" style="margin-top:14px">
         <h3>成交额靠前个股（附轻量评分）</h3>
         <table class="table">
-          <thead><tr><th>名称</th><th>价格</th><th>涨跌</th><th>PE</th><th>ROE</th><th>评分</th></tr></thead>
+          <thead><tr><th>名称</th><th>价格</th><th>涨跌</th><th>主力净流入</th><th>PE</th><th>ROE</th><th>评分</th></tr></thead>
           <tbody>${hot}</tbody>
         </table>
         <p class="muted">${data.disclaimer}</p>
@@ -221,6 +283,22 @@ async function openStock(code) {
     const f = (data.finance || {}).latest || {};
     const t = data.trend || {};
     const watched = isWatched(q.code);
+    const ff = data.fund_flow || {};
+    const consec = ff.consecutive || 0;
+    const consecText = !consec ? "无连续方向" : consec > 0 ? `连续净流入 ${consec} 日` : `连续净流出 ${Math.abs(consec)} 日`;
+    const flowDays = (ff.days || [])
+      .slice(0, 10)
+      .map(
+        (d) => `<tr>
+          <td>${d.date || ""}</td>
+          <td class="${clsPct(d.main_net)}">${yi(d.main_net)}</td>
+          <td class="${clsPct(d.extra_large_net)}">${yi(d.extra_large_net)}</td>
+          <td class="${clsPct(d.large_net)}">${yi(d.large_net)}</td>
+          <td class="${clsPct(d.medium_net)}">${yi(d.medium_net)}</td>
+          <td class="${clsPct(d.small_net)}">${yi(d.small_net)}</td>
+        </tr>`
+      )
+      .join("");
     const metrics = [
       ["PE(TTM)", fmt(q.pe_ttm, 1)],
       ["市净率", fmt(q.pb, 2)],
@@ -231,9 +309,9 @@ async function openStock(code) {
       ["净利同比", signed(f.profit_yoy) + "%"],
       ["毛利率", fmt(f.gross_margin, 1) + "%"],
       ["负债率", fmt(f.debt_ratio, 1) + "%"],
+      ["主力净流入", yi(ff.today_main)],
+      ["近5日主力", yi(ff.sum_5)],
       ["MA20", fmt(t.ma20, 2)],
-      ["RSI14", fmt(t.rsi14, 1)],
-      ["MACD", (t.macd && t.macd.cross) || "—"],
     ]
       .map(([k, v]) => `<div class="card"><div class="muted">${k}</div><div>${v}</div></div>`)
       .join("");
@@ -264,6 +342,23 @@ async function openStock(code) {
       <div class="grid two" style="margin-top:14px">
         ${scoreCard(data.score)}
         <div class="card">
+          <h3>主力资金净流入</h3>
+          <div class="metrics">
+            <div><div class="muted">当日主力</div><div class="${clsPct(ff.today_main)}">${yi(ff.today_main)}</div></div>
+            <div><div class="muted">近5日</div><div class="${clsPct(ff.sum_5)}">${yi(ff.sum_5)}</div></div>
+            <div><div class="muted">近10日</div><div class="${clsPct(ff.sum_10)}">${yi(ff.sum_10)}</div></div>
+            <div><div class="muted">近5日流入天数</div><div>${ff.inflow_days_5 ?? "—"} / 5</div></div>
+          </div>
+          <p class="reason">超大单 ${yi(ff.today_extra_large)} · 大单 ${yi(ff.today_large)} · 中单 ${yi(ff.today_medium)} · 小单 ${yi(ff.today_small)}</p>
+          <p class="reason">${consecText} · 主力=超大单+大单 · 当日东财延迟快照，历史新浪日频</p>
+          <canvas class="flow-chart" id="flow-chart"></canvas>
+          <table class="table">
+            <thead><tr><th>日期</th><th>主力</th><th>超大单</th><th>大单</th><th>中单</th><th>小单</th></tr></thead>
+            <tbody>${flowDays || `<tr><td colspan="6" class="muted">暂无历史资金数据</td></tr>`}</tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px">
           <h3>财务快照 ${f.report_date || ""}</h3>
           <p class="reason">营收 ${yi(f.revenue)} · 净利润 ${yi(f.profit)} · EPS ${fmt(f.eps, 2)}</p>
           <p class="reason">近3年 PE 分位：30% = ${fmt(data.valuation && data.valuation.p30, 1)}，中位 ${fmt(data.valuation && data.valuation.p50, 1)}，70% = ${fmt(data.valuation && data.valuation.p70, 1)}</p>
@@ -272,11 +367,12 @@ async function openStock(code) {
             <tbody>${quarters}</tbody>
           </table>
         </div>
-      </div>
       <div class="metrics" style="margin-top:14px">${metrics}</div>
       <p class="muted">${data.disclaimer}</p>`;
     const canvas = $("#kline");
     drawKline(canvas, data.kline || []);
+    const flowCanvas = $("#flow-chart");
+    if (flowCanvas) drawFlow(flowCanvas, ff.days || []);
     $("#watch-btn").addEventListener("click", () => {
       toggleWatch({ code: q.code, name: q.name });
       openStock(q.code);
@@ -300,11 +396,13 @@ async function renderScreener() {
         <input id="industry" placeholder="行业包含 如 半导体" />
         <select id="sort">
           <option value="amount">按成交额</option>
+          <option value="flow">按主力净流入</option>
           <option value="pct">按涨跌幅</option>
           <option value="mktcap">按市值</option>
           <option value="turnover">按换手</option>
         </select>
         <label class="muted"><input id="exclude_st" type="checkbox" checked /> 排除 ST</label>
+        <label class="muted"><input id="inflow_only" type="checkbox" /> 仅主力净流入</label>
         <button id="run-screen">筛选</button>
       </div>
       <div id="screen-result" class="muted">设置条件后点筛选。</div>
@@ -323,6 +421,7 @@ async function runScreener() {
     industry: $("#industry").value,
     sort: $("#sort").value,
     exclude_st: $("#exclude_st").checked ? "1" : "0",
+    inflow_only: $("#inflow_only").checked ? "1" : "0",
   });
   try {
     const data = await api("/api/screener?" + qs.toString());
@@ -339,6 +438,7 @@ async function runScreener() {
         <td class="${clsPct(r.pct)}">${signed(r.pct)}%</td>
         <td>${fmt(r.pe_ttm || r.pe, 1)}</td>
         <td>${fmt(r.pb, 2)}</td>
+        <td class="${clsPct(r.main_net_inflow)}">${yi(r.main_net_inflow)}</td>
         <td>${fmt(r.roe, 1)}</td>
         <td>${r.score.total} · ${r.score.verdict}</td>
       </tr>`
@@ -346,7 +446,7 @@ async function runScreener() {
       .join("");
     box.innerHTML = `<p class="muted">${data.note} 命中 ${data.total} 只，展示前 ${data.items.length} 只。初筛分不含日 K，点进去才是完整研究评分。</p>
       <table class="table">
-          <thead><tr><th>名称</th><th>行业</th><th>价格</th><th>涨跌</th><th>PE</th><th>PB</th><th>ROE</th><th>初筛分</th></tr></thead>
+          <thead><tr><th>名称</th><th>行业</th><th>价格</th><th>涨跌</th><th>PE</th><th>PB</th><th>主力净流入</th><th>ROE</th><th>初筛分</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
     box.querySelectorAll("tr[data-code]").forEach((tr) => tr.addEventListener("click", () => openStock(tr.dataset.code)));
