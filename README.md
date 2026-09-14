@@ -67,6 +67,7 @@
 
 ###  ✨ 简介
 - 本项目基于Wails和NaiveUI开发，结合AI大模型构建的股票分析工具。
+- **只做 A 股、免费公开数据、开门能用的研究台**：见独立目录 [`ashare-lab`](./ashare-lab/README.md)（Python 启动，无需 AI Key / VIP / 桌面编译）。
 - 支持 A股/港股/美股行情、场内ETF基金搜索、基金自选与排行。
 - 内置 AI 智能体（React/PlanExecute/DeepAgents 三种模式）、150+ AI 数据工具、技能系统、MCP 扩展与浮动 AI 助手。
 - 支持 K线分析（复权切换/波浪理论/测量画框/13种绘图工具）、分时与分笔成交、集合竞价、个股资金流向。
