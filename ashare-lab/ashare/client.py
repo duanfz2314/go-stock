@@ -181,7 +181,7 @@ class AShareClient:
         url = (
             "https://searchapi.eastmoney.com/api/suggest/get"
             f"?input={q}&type=14&token=FAKESECRET_k3l4m5n6o7p8q9r0s1t2"
-            f"&markettype=&mktnum=&jys=&classify=&securitytype=1,2,23&status=&count={count}"
+            f"&markettype=&mktnum=&jys=&classify=&status=&count={count}"
         )
         data = http_json(url, "https://quote.eastmoney.com/")
         table = (data.get("QuotationCodeTable") or {}).get("Data") or []

@@ -35,7 +35,10 @@ python3 -m unittest tests/test_analysis.py
 python3 server.py
 ```
 
-浏览器打开 http://127.0.0.1:8787
+浏览器打开 http://127.0.0.1:8787 （默认是单文件「一页纸」`web/simple.html`）
+
+- 极简一页纸：http://127.0.0.1:8787/
+- 完整版（市场 / 选股 / 自选）：http://127.0.0.1:8787/full.html
 
 ## 数据源
 

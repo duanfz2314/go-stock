@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>A股研究台 · 完整版</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div class="brand">
+        <span class="mark">A</span>
+        <div>
+          <strong>A股研究台</strong>
+          <small>免费公开数据 · 日频 · 可解释评分 · <a href="/" style="color:#3ee0c5">一页纸</a></small>
+        </div>
+      </div>
+      <form id="search-form" class="search">
+        <input id="search-input" autocomplete="off" placeholder="输入名称或代码，例如 茅台 / 600519" />
+        <button type="submit">研究</button>
+        <div id="suggest" class="suggest" hidden></div>
+      </form>
+      <nav class="nav">
+        <button data-page="market" class="active">市场</button>
+        <button data-page="screener">选股</button>
+        <button data-page="watch">自选</button>
+      </nav>
+    </header>
+
+    <p class="banner">只覆盖沪深京 A 股。评分用于缩小研究范围，不是买卖建议。数据有延迟。</p>
+
+    <section id="page-market" class="page"></section>
+    <section id="page-stock" class="page" hidden></section>
+    <section id="page-screener" class="page" hidden></section>
+    <section id="page-watch" class="page" hidden></section>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

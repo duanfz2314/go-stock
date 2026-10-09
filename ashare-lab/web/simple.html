@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>A股一页纸</title>
+  <style>
+    :root {
+      --ink: #1c1915;
+      --muted: #6b6358;
+      --line: #e4d9c8;
+      --paper: #f6f1e7;
+      --card: #fffdf8;
+      --up: #c43c3c;
+      --down: #1f8a5b;
+      --accent: #8b3d2b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 16px/1.55 "Iwanami","Songti SC","Noto Serif SC","Source Han Serif SC",serif;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 28px 20px 72px; }
+    header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+    h1 { font-size: 22px; margin: 0; letter-spacing: 0.08em; }
+    header small, .hint, .muted { color: var(--muted); font-size: 13px; }
+    a { color: var(--accent); }
+    form { display: flex; gap: 8px; margin: 18px 0 8px; position: relative; }
+    input, button {
+      font: inherit; border-radius: 2px; border: 1px solid var(--ink); background: var(--card);
+    }
+    input { flex: 1; padding: 10px 12px; }
+    button { padding: 10px 16px; background: var(--ink); color: var(--paper); cursor: pointer; }
+    .suggest {
+      position: absolute; top: 46px; left: 0; right: 72px; background: var(--card);
+      border: 1px solid var(--line); z-index: 5;
+    }
+    .suggest div { padding: 8px 12px; display: flex; justify-content: space-between; cursor: pointer; }
+    .suggest div:hover { background: #f0e8d8; }
+    .tape {
+      display: flex; flex-wrap: wrap; gap: 10px 16px; padding: 10px 0 18px;
+      border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; font-size: 14px;
+    }
+    .up { color: var(--up); }
+    .down { color: var(--down); }
+    .sheet { background: var(--card); border: 1px solid var(--line); padding: 22px 22px 16px; margin-top: 18px; }
+    .name { font-size: 28px; margin: 0; }
+    .row { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+    .score { font-size: 64px; line-height: 0.9; font-weight: 700; }
+    .verdict {
+      display: inline-block; border: 1px solid var(--accent); color: var(--accent);
+      padding: 2px 8px; letter-spacing: 0.12em; font-size: 13px; margin: 8px 0;
+    }
+    .bars { margin: 16px 0 8px; }
+    .bar-row { display: grid; grid-template-columns: 3em 1fr 3.5em; gap: 8px; align-items: center; font-size: 14px; margin: 6px 0; }
+    .bar { height: 7px; background: #eee4d4; }
+    .bar > i { display: block; height: 100%; background: var(--accent); }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0; }
+    .grid b { display: block; font-size: 15px; font-variant-numeric: tabular-nums; }
+    .grid span { color: var(--muted); font-size: 12px; }
+    ul { margin: 8px 0 0; padding-left: 1.1em; }
+    li { margin: 4px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+    th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+    .err { color: var(--up); }
+    @media (max-width: 640px) {
+      .grid, .row { display: block; }
+      .score { font-size: 48px; margin: 8px 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>A股一页纸</h1>
+        <small>免费公开数据 · 日频 · 不是买卖建议</small>
+      </div>
+      <small><a href="/full.html">完整版</a></small>
+    </header>
+
+    <form id="form">
+      <input id="q" autocomplete="off" placeholder="输入名称或代码，例如 德科立 / 688205" />
+      <button>研究</button>
+      <div id="suggest" class="suggest" hidden></div>
+    </form>
+    <div id="tape" class="tape muted">正在读市场…</div>
+    <div id="main"></div>
+  </div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const signed = (n, d = 2) => n == null || Number.isNaN(n) ? "—" : (Number(n) > 0 ? "+" : "") + Number(n).toFixed(d);
+    const fmt = (n, d = 2) => n == null || Number.isNaN(n) ? "—" : Number(n).toFixed(d);
+    const yi = (n) => {
+      if (n == null || Number.isNaN(n)) return "—";
+      const v = Number(n);
+      if (Math.abs(v) >= 1e8) return (v / 1e8).toFixed(2) + "亿";
+      if (Math.abs(v) >= 1e4) return (v / 1e4).toFixed(2) + "万";
+      return String(Math.round(v));
+    };
+    const tone = (n) => n == null ? "" : Number(n) >= 0 ? "up" : "down";
+    async function api(path) {
+      const res = await fetch(path);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "请求失败");
+      return data;
+    }
+
+    async function loadTape() {
+      try {
+        const m = await api("/api/market");
+        const idx = (m.indices || []).slice(0, 4).map((x) =>
+          `<span>${x.name} <b class="${tone(x.pct)}">${fmt(x.price, 2)} ${signed(x.pct)}%</b></span>`
+        ).join("");
+        const b = m.breadth || {};
+        const inflow = (m.money_in || []).slice(0, 3).map((x) =>
+          `${x.name} <b class="up">${yi(x.main_net_inflow)}</b>`
+        ).join(" · ");
+        $("tape").innerHTML = `${idx}<span>上涨 ${b.up ?? "—"} / 下跌 ${b.down ?? "—"}</span><span>流入 ${inflow || "—"}</span>`;
+      } catch (e) {
+        $("tape").innerHTML = `<span class="err">${e.message}</span>`;
+      }
+    }
+
+    function sheet(d) {
+      const q = d.quote || {};
+      const f = (d.finance || {}).latest || {};
+      const ff = d.fund_flow || {};
+      const t = d.trend || {};
+      const sc = d.score || {};
+      const why = (sc.parts || []).flatMap((p) => (p.reasons || []).slice(0, 1));
+      const risks = sc.risks || [];
+      const bars = (sc.parts || []).map((p) => {
+        const pct = Math.max(0, Math.min(100, (p.score / p.max_score) * 100));
+        return `<div class="bar-row"><span>${p.name}</span><div class="bar"><i style="width:${pct}%"></i></div><span>${p.score}/${p.max_score}</span></div>`;
+      }).join("");
+      const days = (ff.days || []).slice(0, 6).map((x) =>
+        `<tr><td>${x.date || ""}</td><td class="${tone(x.main_net)}">${yi(x.main_net)}</td><td class="${tone(x.extra_large_net)}">${yi(x.extra_large_net)}</td><td class="${tone(x.large_net)}">${yi(x.large_net)}</td></tr>`
+      ).join("");
+      return `<article class="sheet">
+        <div class="row">
+          <div>
+            <h2 class="name">${q.name || ""} <span class="${tone(q.pct)}">${fmt(q.price)} ${signed(q.pct)}%</span></h2>
+            <p class="muted">${q.ts_code || ""} · ${q.industry || ""} · ${f.report_type || ""}</p>
+            <div class="verdict">${sc.verdict || ""}</div>
+            <p>${sc.verdict_note || ""}</p>
+          </div>
+          <div class="score">${sc.total ?? "—"}</div>
+        </div>
+        <div class="bars">${bars}</div>
+        <div class="grid">
+          <div><span>PE(TTM)</span><b>${fmt(q.pe_ttm, 1)}</b></div>
+          <div><span>市净率</span><b>${fmt(q.pb, 2)}</b></div>
+          <div><span>ROE</span><b>${fmt(f.roe, 1)}%</b></div>
+          <div><span>总市值</span><b>${yi(q.mkt_cap)}</b></div>
+          <div><span>营收同比</span><b class="${tone(f.revenue_yoy)}">${signed(f.revenue_yoy)}%</b></div>
+          <div><span>净利同比</span><b class="${tone(f.profit_yoy)}">${signed(f.profit_yoy)}%</b></div>
+          <div><span>当日主力</span><b class="${tone(ff.today_main)}">${yi(ff.today_main)}</b></div>
+          <div><span>近5日主力</span><b class="${tone(ff.sum_5)}">${yi(ff.sum_5)}</b></div>
+        </div>
+        <p class="muted">均线 ${t.alignment || "—"} · 近20日 ${signed(t.ret20)}% · RSI ${fmt(t.rsi14, 1)} · 主力=超大单+大单</p>
+        <h3 style="font-size:15px;margin:18px 0 0">为什么这样评</h3>
+        <ul>${why.concat(risks).map((x) => `<li>${x}</li>`).join("")}</ul>
+        <h3 style="font-size:15px;margin:18px 0 8px">主力净流入</h3>
+        <table>
+          <thead><tr><th>日期</th><th>主力</th><th>超大单</th><th>大单</th></tr></thead>
+          <tbody>${days || `<tr><td colspan="4">暂无</td></tr>`}</tbody>
+        </table>
+        <p class="hint">${d.disclaimer || ""}</p>
+      </article>`;
+    }
+
+    async function openStock(code) {
+      $("main").innerHTML = `<p class="muted">正在研究 ${code}…</p>`;
+      history.replaceState(null, "", "#/" + code);
+      try {
+        const d = await api("/api/stock/" + code);
+        $("main").innerHTML = sheet(d);
+      } catch (e) {
+        $("main").innerHTML = `<p class="err">${e.message}</p>`;
+      }
+    }
+
+    let timer = 0;
+    $("q").addEventListener("input", () => {
+      clearTimeout(timer);
+      const text = $("q").value.trim();
+      if (!text) { $("suggest").hidden = true; return; }
+      timer = setTimeout(async () => {
+        try {
+          const data = await api("/api/search?q=" + encodeURIComponent(text));
+          if (!data.items.length) { $("suggest").hidden = true; return; }
+          $("suggest").innerHTML = data.items.map((it) =>
+            `<div data-code="${it.code}"><span>${it.name}</span><span class="muted">${it.ts_code} ${it.type}</span></div>`
+          ).join("");
+          $("suggest").hidden = false;
+          $("suggest").querySelectorAll("div").forEach((el) => el.onclick = () => {
+            $("suggest").hidden = true;
+            $("q").value = el.dataset.code;
+            openStock(el.dataset.code);
+          });
+        } catch { $("suggest").hidden = true; }
+      }, 200);
+    });
+
+    $("form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const text = $("q").value.trim();
+      if (/^\d{6}/.test(text)) openStock(text.slice(0, 6));
+      else api("/api/search?q=" + encodeURIComponent(text)).then((d) => { if (d.items[0]) openStock(d.items[0].code); });
+    });
+
+    loadTape();
+    const hit = location.hash.match(/#\/(\d{6})/);
+    if (hit) openStock(hit[1]);
+    else $("main").innerHTML = `<p class="hint">搜一只沪深京 A 股，得到一页能看懂的研究结论。评分用来缩小范围，不是荐股。</p>`;
+  </script>
+</body>
+</html>

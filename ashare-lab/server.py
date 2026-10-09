@@ -30,8 +30,10 @@ class Handler(SimpleHTTPRequestHandler):
         if parsed.path.startswith("/api/"):
             self._handle_api(parsed.path, parse_qs(parsed.query))
             return
-        if parsed.path in ("/", "/index.html"):
-            self.path = "/index.html"
+        if parsed.path in ("/", "/index.html", "/simple.html"):
+            self.path = "/simple.html"
+        elif parsed.path in ("/full.html", "/full"):
+            self.path = "/full.html"
         return super().do_GET()
 
     def _handle_api(self, path: str, qs: dict) -> None:

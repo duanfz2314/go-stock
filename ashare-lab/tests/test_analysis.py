@@ -16,6 +16,7 @@ class CodeTests(unittest.TestCase):
         self.assertTrue(is_a_share_equity("000001.SZ"))
         self.assertTrue(is_a_share_equity("300750"))
         self.assertTrue(is_a_share_equity("688981"))
+        self.assertTrue(is_a_share_equity("688205"))
         self.assertTrue(is_a_share_equity("830799"))
         self.assertFalse(is_a_share_equity("00700"))
         self.assertFalse(is_a_share_equity("AAPL"))
